@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UoA Grade Dashboard</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #000; color: white; font-family: -apple-system, sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 20px; }
+        .search-input { background: rgba(255, 255, 255, 0.1); border: none; outline: none; transition: 0.3s; }
+        .search-input:focus { background: rgba(255, 255, 255, 0.15); box-shadow: 0 0 0 2px #3b82f6; }
+        
+        .term-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; position: relative; }
+        .term-btn:active { transform: scale(0.95); }
+        .term-btn.active-all { background: rgba(255, 255, 255, 0.15); color: white; border-color: rgba(255,255,255,0.3); }
+        .term-btn.active-ss { background: rgba(245, 158, 11, 0.25); color: #f59e0b; border-color: rgba(245, 158, 11, 0.5); box-shadow: 0 0 15px rgba(245, 158, 11, 0.1); }
+        .term-btn.active-s1 { background: rgba(59, 130, 246, 0.25); color: #3b82f6; border-color: rgba(59, 130, 246, 0.5); box-shadow: 0 0 15px rgba(59, 130, 246, 0.1); }
+        .term-btn.active-s2 { background: rgba(139, 92, 246, 0.25); color: #a78bfa; border-color: rgba(139, 92, 246, 0.5); box-shadow: 0 0 15px rgba(139, 92, 246, 0.1); }
+    </style>
+</head>
+
+<body class="p-4 md:p-8">
+    <div id="app" class="max-w-6xl mx-auto">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+            <div>
+                <h1 class="text-3xl font-bold tracking-tight">UoA Grade <span class="text-blue-500">Insights</span></h1>
+                <p class="text-gray-500 text-sm">Official Data • Visualized for Students</p>
+            </div>
+            <div class="relative w-full md:w-80">
+                <input v-model="searchQuery" @input="handleSearch" placeholder="Search course (e.g. COMPSCI 101)"
+                    class="search-input w-full py-3 px-6 rounded-full text-white">
+                <div v-if="searchResults.length" class="absolute mt-2 w-full glass z-50 max-h-64 overflow-y-auto shadow-2xl">
+                    <div v-for="res in searchResults" :key="res.id" @click="selectCourse(res.id)"
+                        class="px-6 py-3 hover:bg-blue-500/20 cursor-pointer border-b border-white/5 last:border-0 transition-colors">
+                        {{ res.id }}
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div v-if="currentCourse" class="space-y-6">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h2 class="text-4xl font-bold">{{ currentCourse }}</h2>
+                
+                <div class="flex bg-white/5 p-1 rounded-xl border border-white/10 backdrop-blur-md">
+                    <button v-for="opt in filterOptions" :key="opt.value" 
+                        @click="setFilter(opt.value)"
+                        :class="[
+                            'px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider term-btn border border-transparent',
+                            selectedTermFilter === opt.value ? opt.activeClass : 'text-gray-500 hover:text-gray-300'
+                        ]">
+                        {{ opt.label }}
+                    </button>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="glass p-6 border-l-4 border-green-500">
+                    <p class="text-xs text-gray-400 uppercase tracking-widest mb-1">Pass Rate</p>
+                    <p class="text-3xl font-bold text-green-400">{{ selectedRecord?.pass_rate }}%</p>
+                </div>
+                <div class="glass p-6 border-l-4 border-blue-500">
+                    <p class="text-xs text-gray-400 uppercase tracking-widest mb-1">A Range</p>
+                    <p class="text-3xl font-bold text-blue-400">{{ selectedRecord?.a_rate }}%</p>
+                </div>
+                <div class="glass p-6 border-l-4 border-orange-500">
+                    <p class="text-xs text-gray-400 uppercase tracking-widest mb-1">Risk (Fail/DNC)</p>
+                    <p class="text-3xl font-bold text-orange-400">{{ selectedRecord?.risk_rate }}%</p>
+                </div>
+                <div class="glass p-6 border-l-4 border-gray-500">
+                    <p class="text-xs text-gray-400 uppercase tracking-widest mb-1">Headcount</p>
+                    <p class="text-3xl font-bold">{{ selectedRecord?.headcount }}</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-2 glass p-6">
+                    <h3 class="text-sm font-semibold text-gray-400 mb-6 flex justify-between">
+                        <span>Historical Trend</span>
+                        <span class="text-blue-500">{{ selectedTermFilter }} View</span>
+                    </h3>
+                    <div class="h-[250px] relative">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass p-6">
+                    <h3 class="text-sm font-semibold mb-6 text-gray-400 text-center">
+                        Grade Bands ({{ selectedRecord?.term }} {{ selectedRecord?.year }})
+                    </h3>
+                    <div class="h-[250px] relative">
+                        <canvas id="bandChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-else class="h-96 flex flex-col items-center justify-center text-center">
+            <div class="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center mb-6 rotate-12 border border-white/10">
+                <i class="text-blue-500 text-2xl font-black not-italic">UoA</i>
+            </div>
+            <h2 class="text-2xl font-semibold mb-2">Ready to explore?</h2>
+            <p class="text-gray-500 max-w-sm">Search for any course code to see historical performance and grade distributions.</p>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    searchQuery: '',
+                    index: [],
+                    allData: {},
+                    searchResults: [],
+                    currentCourse: null,
+                    selectedRecordIndex: 0,
+                    selectedTermFilter: 'ALL',
+                    trendChart: null,
+                    bandChart: null,
+                    filterOptions: [
+                        { label: 'All', value: 'ALL', activeClass: 'active-all' },
+                        { label: 'SS', value: 'Summer', activeClass: 'active-ss' },
+                        { label: 'S1', value: 'Semester 1', activeClass: 'active-s1' },
+                        { label: 'S2', value: 'Semester 2', activeClass: 'active-s2' }
+                    ],
+                    isClickLocked: false,
+                    lastClickTime: 0
+                }
+            },
+            computed: {
+                filteredRecords() {
+                    if (!this.currentCourse || !this.allData[this.currentCourse]) return [];
+                    const records = this.allData[this.currentCourse];
+                    if (this.selectedTermFilter === 'ALL') return records;
+                    return records.filter(r => r.term === this.selectedTermFilter);
+                },
+                selectedRecord() {
+                    const records = this.filteredRecords;
+                    if (!records.length) return null;
+                    const validIndex = Math.min(Math.max(0, this.selectedRecordIndex), records.length - 1);
+                    return records[validIndex];
+                }
+            },
+            async mounted() {
+                try {
+                    const [idxRes, dataRes] = await Promise.all([
+                        fetch('search-index.json').then(r => r.json()),
+                        fetch('course-data.json').then(r => r.json())
+                    ]);
+                    this.index = idxRes;
+                    this.allData = dataRes;
+                } catch (e) { 
+                    console.error("Data loading failed", e);
+                }
+            },
+            beforeUnmount() {
+                this.destroyCharts();
+            },
+            methods: {
+                destroyCharts() {
+                    try {
+                        if (this.trendChart) {
+                            this.trendChart.destroy();
+                            this.trendChart = null;
+                        }
+                        if (this.bandChart) {
+                            this.bandChart.destroy();
+                            this.bandChart = null;
+                        }
+                    } catch (e) {
+                        console.error('Error destroying charts:', e);
+                    }
+                },
+                setFilter(val) {
+                    if (this.selectedTermFilter === val) return;
+                    
+                    // 0.5秒防抖锁
+                    if (this.isClickLocked) {
+                        console.log('Please wait 0.5 second between filter changes');
+                        return;
+                    }
+                    
+                    this.isClickLocked = true;
+                    this.selectedTermFilter = val;
+                    this.selectedRecordIndex = Math.max(0, this.filteredRecords.length - 1);
+                    this.renderCharts();
+                    
+                    setTimeout(() => {
+                        this.isClickLocked = false;
+                    }, 500);
+                },
+                handleSearch() {
+                    if (!this.searchQuery) return this.searchResults = [];
+                    this.searchResults = this.index.filter(i =>
+                        i.id.toLowerCase().includes(this.searchQuery.toLowerCase())
+                    ).slice(0, 8);
+                },
+                selectCourse(id) {
+                    this.currentCourse = id;
+                    this.searchResults = [];
+                    this.searchQuery = '';
+                    this.selectedTermFilter = 'ALL';
+
+                    const termOrder = { 'Summer': 0, 'Semester 1': 1, 'Semester 2': 2 };
+                    this.allData[id].sort((a, b) => {
+                        if (a.year !== b.year) return a.year - b.year;
+                        return (termOrder[a.term] ?? 9) - (termOrder[b.term] ?? 9);
+                    });
+
+                    this.selectedRecordIndex = this.allData[id].length - 1;
+                    
+                    this.$nextTick(() => {
+                        this.renderCharts();
+                    });
+                },
+                getTermColor(term) {
+                    const colors = { 'Summer': '#F59E0B', 'Semester 1': '#3B82F6', 'Semester 2': '#8B5CF6' };
+                    return colors[term] || '#888';
+                },
+                renderCharts() {
+                    // 销毁旧图表
+                    this.destroyCharts();
+                    
+                    // 等待DOM更新后创建新图表
+                    this.$nextTick(() => {
+                        this.initTrendChart();
+                        this.updateBandChart();
+                    });
+                },
+                initTrendChart() {
+                    const canvas = document.getElementById('trendChart');
+                    if (!canvas) return;
+
+                    const records = this.filteredRecords;
+                    if (!records.length) return;
+
+                    const ctx = canvas.getContext('2d');
+                    const self = this;
+                    
+                    this.trendChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: records.map(r => `${r.year} ${r.term === 'Summer' ? 'SS' : (r.term === 'Semester 1' ? 'S1' : 'S2')}`),
+                            datasets: [{
+                                data: records.map(r => r.pass_rate),
+                                backgroundColor: records.map(r => this.getTermColor(r.term)),
+                                borderRadius: 6,
+                                hoverBorderWidth: 2,
+                                hoverBorderColor: '#fff'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            onClick: function(e, elements) {
+                                if (elements.length > 0) {
+                                    // 0.5秒防抖锁
+                                    const now = Date.now();
+                                    if (self.isClickLocked) {
+                                        console.log('Please wait 0.5 second between clicks');
+                                        return;
+                                    }
+                                    
+                                    self.isClickLocked = true;
+                                    const clickedIndex = elements[0].index;
+                                    self.selectedRecordIndex = clickedIndex;
+                                    self.updateBandChart();
+                                    
+                                    setTimeout(() => {
+                                        self.isClickLocked = false;
+                                    }, 500);
+                                }
+                            },
+                            scales: {
+                                y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666' } },
+                                x: { grid: { display: false }, ticks: { color: '#888', font: { size: 10 } } }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                },
+                updateBandChart() {
+                    const canvas = document.getElementById('bandChart');
+                    if (!canvas || !this.selectedRecord) return;
+
+                    // 销毁旧的band chart
+                    if (this.bandChart) {
+                        try {
+                            this.bandChart.destroy();
+                        } catch (e) {
+                            console.error('Error destroying band chart:', e);
+                        }
+                        this.bandChart = null;
+                    }
+
+                    const bands = this.selectedRecord.bands;
+                    const ctx = canvas.getContext('2d');
+
+                    // 创建新的band chart
+                    this.bandChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: ['A Range', 'B Range', 'C Range', 'Fail', 'W'],
+                            datasets: [{
+                                data: [bands.A, bands.B, bands.C, bands.Fail, bands.W],
+                                backgroundColor: ['#3b82f6', '#8b5cf6', '#06b6d4', '#f97316', '#4b5563'],
+                                borderRadius: 8
+                            }]
+                        },
+                        options: {
+                            indexAxis: 'y',
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666' } },
+                                y: { grid: { display: false }, ticks: { color: '#fff' } }
+                            }
+                        }
+                    });
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
