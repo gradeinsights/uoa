@@ -17,7 +17,7 @@ UoA Grade Insights 是一个分析奥克兰大学全部课程通过率以及分�
 
 ## 起因
 
-在使用coursespy.com查看大学课程评价的时候，我发现了其位于右上角的Grade Distribution功能，但该功能在coursespy.com上已经名存实亡，许多课程代码的信息全部为11%能看出明显的错误。通过该功能的介绍我搜索到了奥克兰大学的Student Grade Distributions Dashboard介绍，并通过[数据下载链接](https://microstrategy.auckland.ac.nz/MicroStrategyLibraryExternal/app/config/CFDF93E548564A87A831B59B5E0A5373/D75D071F6C4A184F1ED60DA65891FD4C/1FEE2DC6BB40D667F7AAABBA55D6E482/K53--K46)下载到我想要的数据拖入tableau进行一些基础的分析。但每次下载数据并进行相同操作的繁琐（为了减少在BI软件内的filter筛选，我一般只下载当时需要的数据）以及Mac端tableau糟糕的体验让我萌生了只做制作这个网站的想法。
+在使用[coursespy.com](https://coursespy.com)查看大学课程评价的时候，我发现了其位于右上角的Grade Distribution功能，但该功能在[coursespy.com](https://coursespy.com)上已经名存实亡，许多课程代码的信息全部为11%能看出明显的错误。通过该功能的介绍我搜索到了奥克兰大学的Student Grade Distributions Dashboard介绍，并通过[数据下载链接](https://microstrategy.auckland.ac.nz/MicroStrategyLibraryExternal/app/config/CFDF93E548564A87A831B59B5E0A5373/D75D071F6C4A184F1ED60DA65891FD4C/1FEE2DC6BB40D667F7AAABBA55D6E482/K53--K46)下载到我想要的数据拖入tableau进行一些基础的分析。但每次下载数据并进行相同操作的繁琐（为了减少在BI软件内的filter筛选，我一般只下载当时需要的数据）以及Mac端tableau糟糕的体验让我萌生了只做制作这个网站的想法。
 
 ---
 
