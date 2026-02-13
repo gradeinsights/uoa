@@ -28,7 +28,13 @@
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
             <div>
                 <h1 class="text-3xl font-bold tracking-tight">UoA Grade <span class="text-blue-500">Insights</span></h1>
-                <p class="text-gray-500 text-sm">Official Data • Visualized for Students</p>
+                <p class="text-gray-500 text-sm">
+    All Data From 
+    <a href="https://microstrategy.auckland.ac.nz/MicroStrategyLibraryExternal/app/config/CFDF93E548564A87A831B59B5E0A5373/D75D071F6C4A184F1ED60DA65891FD4C/1FEE2DC6BB40D667F7AAABBA55D6E482/K53--K46" 
+       target="_blank"
+       class="text-blue-500 hover:text-blue-600 hover:underline transition">
+       UoA Student Grade Distributions Dashboard</a></p>
+
             </div>
             <div class="relative w-full md:w-80">
                 <input v-model="searchQuery" @input="handleSearch" placeholder="Search course (e.g. COMPSCI 101)"
