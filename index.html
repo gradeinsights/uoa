@@ -179,9 +179,9 @@
                 setFilter(val) {
                     if (this.selectedTermFilter === val) return;
                     
-                    // 0.5秒防抖锁
+                    // 1秒防抖锁
                     if (this.isClickLocked) {
-                        console.log('Please wait 0.5 second between filter changes');
+                        console.log('Please wait 1 second between filter changes');
                         return;
                     }
                     
@@ -192,7 +192,7 @@
                     
                     setTimeout(() => {
                         this.isClickLocked = false;
-                    }, 500);
+                    }, 1000);
                 },
                 handleSearch() {
                     if (!this.searchQuery) return this.searchResults = [];
@@ -259,10 +259,10 @@
                             maintainAspectRatio: false,
                             onClick: function(e, elements) {
                                 if (elements.length > 0) {
-                                    // 0.5秒防抖锁
+                                    // 1秒防抖锁
                                     const now = Date.now();
                                     if (self.isClickLocked) {
-                                        console.log('Please wait 0.5 second between clicks');
+                                        console.log('Please wait 1 second between clicks');
                                         return;
                                     }
                                     
@@ -273,7 +273,7 @@
                                     
                                     setTimeout(() => {
                                         self.isClickLocked = false;
-                                    }, 500);
+                                    }, 1000);
                                 }
                             },
                             scales: {
