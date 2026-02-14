@@ -132,7 +132,8 @@
                         { label: 'S2', value: 'Semester 2', activeClass: 'active-s2' }
                     ],
                     isClickLocked: false,
-                    lastClickTime: 0
+                    lastClickTime: 0,
+                    isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
                 }
             },
             computed: {
@@ -195,7 +196,7 @@
                     
                     setTimeout(() => {
                         this.isClickLocked = false;
-                    }, 1000);
+                    }, this.isMobile ? 3000 : 1000);
                 },
                 handleSearch() {
                     if (!this.searchQuery) return this.searchResults = [];
@@ -226,10 +227,10 @@
                     
                     this.$nextTick(() => {
                         this.renderCharts();
-                        // 搜索后渲染两个图表需要1.5秒，期间禁止所有点击操作
+                        // 搜索后渲染两个图表：移动端4秒，桌面端1.5秒
                         setTimeout(() => {
                             this.isClickLocked = false;
-                        }, 1500);
+                        }, this.isMobile ? 4000 : 1500);
                     });
                 },
                 getTermColor(term) {
@@ -286,7 +287,7 @@
                                     
                                     setTimeout(() => {
                                         self.isClickLocked = false;
-                                    }, 1000);
+                                    }, self.isMobile ? 3000 : 1000);
                                 }
                             },
                             scales: {
