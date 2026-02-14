@@ -204,6 +204,13 @@
                     ).slice(0, 8);
                 },
                 selectCourse(id) {
+                    // 防止在渲染过程中重复点击
+                    if (this.isClickLocked) {
+                        console.log('Please wait, charts are rendering...');
+                        return;
+                    }
+                    
+                    this.isClickLocked = true;
                     this.currentCourse = id;
                     this.searchResults = [];
                     this.searchQuery = '';
@@ -219,6 +226,10 @@
                     
                     this.$nextTick(() => {
                         this.renderCharts();
+                        // 给更长的时间来渲染所有图表
+                        setTimeout(() => {
+                            this.isClickLocked = false;
+                        }, 1500);
                     });
                 },
                 getTermColor(term) {
