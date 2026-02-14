@@ -49,14 +49,21 @@
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h2 class="text-4xl font-bold">{{ currentCourse }}</h2>
                 
-                <div class="flex bg-white/5 p-1 rounded-xl border border-white/10 backdrop-blur-md">
-                    <button v-for="opt in filterOptions" :key="opt.value" 
-                        @click="setFilter(opt.value)"
-                        :class="[
-                            'px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider term-btn border border-transparent',
-                            selectedTermFilter === opt.value ? opt.activeClass : 'text-gray-500 hover:text-gray-300'
-                        ]">
-                        {{ opt.label }}
+                <div class="flex items-center gap-3">
+                    <div class="flex bg-white/5 p-1 rounded-xl border border-white/10 backdrop-blur-md">
+                        <button v-for="opt in filterOptions" :key="opt.value" 
+                            @click="toggleTerm(opt.value)"
+                            :class="[
+                                'px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider term-btn border border-transparent',
+                                selectedTerms.includes(opt.value) ? opt.activeClass : 'text-gray-500 hover:text-gray-300'
+                            ]">
+                            {{ opt.label }}
+                        </button>
+                    </div>
+                    <button @click="exportReportImage"
+                        :disabled="isExporting"
+                        class="px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider border border-white/20 bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {{ isExporting ? 'Exporting...' : 'Export PNG' }}
                     </button>
                 </div>
             </div>
@@ -84,10 +91,36 @@
                 <div class="md:col-span-2 glass p-6">
                     <h3 class="text-sm font-semibold text-gray-400 mb-6 flex justify-between">
                         <span>Historical Trend</span>
-                        <span class="text-blue-500">{{ selectedTermFilter }} View</span>
+                        <div class="flex items-center gap-2">
+                            <button @click="anomalyEnabled = !anomalyEnabled"
+                                :class="[
+                                    'px-2 py-1 rounded-md text-[10px] uppercase tracking-wider border transition-colors',
+                                    anomalyEnabled
+                                        ? 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'
+                                        : 'text-gray-400 border-white/20 bg-white/5'
+                                ]">
+                                Anomaly {{ anomalyEnabled ? 'On' : 'Off' }}
+                            </button>
+                            <span class="text-blue-500">{{ selectedTerms.length === 3 ? 'All Terms' : selectedTerms.map(t => t === 'Summer' ? 'SS' : (t === 'Semester 1' ? 'S1' : 'S2')).join(', ') }}</span>
+                        </div>
                     </h3>
                     <div class="h-[250px] relative">
                         <canvas id="trendChart"></canvas>
+                    </div>
+                    <div class="mt-4" v-if="anomalySummaries.length">
+                        <div class="flex flex-col md:flex-row md:items-center md:gap-3 mb-2">
+                            <p class="text-xs uppercase tracking-wider text-gray-400">
+                                Anomalies (change >= {{ anomalyThreshold }}%)
+                            </p>
+                            <p class="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/40 px-2 py-1 rounded-md">
+                                Important: SS vs regular semester differences may not represent true course difficulty changes. Recommend excluding Summer School first.
+                            </p>
+                        </div>
+                        <div class="space-y-1">
+                            <p v-for="item in anomalySummaries" :key="item.key" class="text-xs text-gray-300">
+                                {{ item.term }}: {{ item.changeLabel }} vs previous ({{ item.current }}% from {{ item.previous }}%)
+                            </p>
+                        </div>
                     </div>
                 </div>
                 <div class="glass p-6">
@@ -123,14 +156,17 @@
                     currentCourse: null,
                     selectedRecordIndex: 0,
                     selectedTermFilter: 'ALL',
+                    selectedTerms: ['Summer', 'Semester 1', 'Semester 2'], // 默认全选
                     trendChart: null,
                     bandChart: null,
                     filterOptions: [
-                        { label: 'All', value: 'ALL', activeClass: 'active-all' },
                         { label: 'SS', value: 'Summer', activeClass: 'active-ss' },
                         { label: 'S1', value: 'Semester 1', activeClass: 'active-s1' },
                         { label: 'S2', value: 'Semester 2', activeClass: 'active-s2' }
                     ],
+                    anomalyEnabled: false,
+                    anomalyThreshold: 8,
+                    isExporting: false,
                     isClickLocked: false,
                     lastClickTime: 0,
                     isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
@@ -140,14 +176,46 @@
                 filteredRecords() {
                     if (!this.currentCourse || !this.allData[this.currentCourse]) return [];
                     const records = this.allData[this.currentCourse];
-                    if (this.selectedTermFilter === 'ALL') return records;
-                    return records.filter(r => r.term === this.selectedTermFilter);
+                    // 如果没有选中任何学期，返回空数组
+                    if (this.selectedTerms.length === 0) return [];
+                    // 根据选中的学期过滤
+                    return records.filter(r => this.selectedTerms.includes(r.term));
                 },
                 selectedRecord() {
                     const records = this.filteredRecords;
                     if (!records.length) return null;
                     const validIndex = Math.min(Math.max(0, this.selectedRecordIndex), records.length - 1);
                     return records[validIndex];
+                },
+                anomalySummaries() {
+                    if (!this.anomalyEnabled) return [];
+                    const records = this.filteredRecords;
+                    if (!records.length) return [];
+                    const anomalies = [];
+                    for (let i = 1; i < records.length; i++) {
+                        const prev = Number(records[i - 1].pass_rate || 0);
+                        const current = Number(records[i].pass_rate || 0);
+                        const diff = current - prev;
+                        if (Math.abs(diff) >= this.anomalyThreshold) {
+                            const shortTerm = records[i].term === 'Summer'
+                                ? 'SS'
+                                : (records[i].term === 'Semester 1' ? 'S1' : 'S2');
+                            anomalies.push({
+                                key: `${records[i].year}-${records[i].term}-${i}`,
+                                term: `${records[i].year} ${shortTerm}`,
+                                changeLabel: `${diff > 0 ? '+' : ''}${diff.toFixed(1)}%`,
+                                current: current.toFixed(1),
+                                previous: prev.toFixed(1)
+                            });
+                        }
+                    }
+                    return anomalies;
+                }
+            },
+            watch: {
+                anomalyEnabled() {
+                    if (!this.currentCourse) return;
+                    this.renderCharts();
                 }
             },
             async mounted() {
@@ -180,9 +248,7 @@
                         console.error('Error destroying charts:', e);
                     }
                 },
-                setFilter(val) {
-                    if (this.selectedTermFilter === val) return;
-                    
+                toggleTerm(termValue) {
                     // 共享锁：任何操作都会禁止所有其他操作
                     if (this.isClickLocked) {
                         console.log('Please wait, operation in progress...');
@@ -190,7 +256,17 @@
                     }
                     
                     this.isClickLocked = true;
-                    this.selectedTermFilter = val;
+                    
+                    const index = this.selectedTerms.indexOf(termValue);
+                    if (index > -1) {
+                        // 如果已选中，则取消选择
+                        this.selectedTerms.splice(index, 1);
+                    } else {
+                        // 如果未选中，则添加
+                        this.selectedTerms.push(termValue);
+                    }
+                    
+                    // 重置选中的记录索引为最新的一条
                     this.selectedRecordIndex = Math.max(0, this.filteredRecords.length - 1);
                     this.renderCharts();
                     
@@ -198,11 +274,53 @@
                         this.isClickLocked = false;
                     }, this.isMobile ? 3000 : 1000);
                 },
+                normalizeCourseText(value) {
+                    return String(value || '')
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, '');
+                },
+                expandAlias(normalizedQuery) {
+                    const aliasRules = [
+                        { from: /^CS(\d+)$/, to: 'COMPSCI$1' },
+                        { from: /^COMSCI(\d+)$/, to: 'COMPSCI$1' },
+                        { from: /^COMPSCIENCE(\d+)$/, to: 'COMPSCI$1' }
+                    ];
+                    for (const rule of aliasRules) {
+                        if (rule.from.test(normalizedQuery)) {
+                            return normalizedQuery.replace(rule.from, rule.to);
+                        }
+                    }
+                    return normalizedQuery;
+                },
                 handleSearch() {
-                    if (!this.searchQuery) return this.searchResults = [];
-                    this.searchResults = this.index.filter(i =>
-                        i.id.toLowerCase().includes(this.searchQuery.toLowerCase())
-                    ).slice(0, 8);
+                    const rawQuery = this.searchQuery.trim();
+                    if (!rawQuery) return this.searchResults = [];
+
+                    const lowerQuery = rawQuery.toLowerCase();
+                    const normalizedQuery = this.normalizeCourseText(rawQuery);
+                    const expandedQuery = this.expandAlias(normalizedQuery);
+
+                    const scored = this.index.map((item) => {
+                        const id = item.id || '';
+                        const lowerId = id.toLowerCase();
+                        const normalizedId = this.normalizeCourseText(id);
+                        let score = 0;
+
+                        if (lowerId === lowerQuery) score += 120;
+                        if (lowerId.includes(lowerQuery)) score += 90;
+                        if (normalizedQuery && normalizedId.includes(normalizedQuery)) score += 80;
+                        if (expandedQuery && expandedQuery !== normalizedQuery && normalizedId.includes(expandedQuery)) score += 70;
+                        if (normalizedQuery && normalizedId.startsWith(normalizedQuery)) score += 20;
+                        if (expandedQuery && normalizedId.startsWith(expandedQuery)) score += 15;
+
+                        return { item, score };
+                    });
+
+                    this.searchResults = scored
+                        .filter((entry) => entry.score > 0)
+                        .sort((a, b) => b.score - a.score || a.item.id.localeCompare(b.item.id))
+                        .slice(0, 8)
+                        .map((entry) => entry.item);
                 },
                 selectCourse(id) {
                     // 共享锁：任何操作都会禁止所有其他操作
@@ -215,7 +333,7 @@
                     this.currentCourse = id;
                     this.searchResults = [];
                     this.searchQuery = '';
-                    this.selectedTermFilter = 'ALL';
+                    this.selectedTerms = ['Summer', 'Semester 1', 'Semester 2']; // 重置为全选
 
                     const termOrder = { 'Summer': 0, 'Semester 1': 1, 'Semester 2': 2 };
                     this.allData[id].sort((a, b) => {
@@ -247,6 +365,169 @@
                         this.updateBandChart();
                     });
                 },
+                exportReportImage() {
+                    if (!this.currentCourse || !this.selectedRecord) return;
+                    const trendCanvas = document.getElementById('trendChart');
+                    const bandCanvas = document.getElementById('bandChart');
+                    if (!trendCanvas || !bandCanvas) return;
+
+                    this.isExporting = true;
+                    const reportCanvas = document.createElement('canvas');
+                    reportCanvas.width = 2200;
+                    reportCanvas.height = 1220;
+                    const ctx = reportCanvas.getContext('2d');
+
+                    const drawRoundedRect = (x, y, w, h, r, fillStyle, strokeStyle) => {
+                        ctx.beginPath();
+                        ctx.moveTo(x + r, y);
+                        ctx.lineTo(x + w - r, y);
+                        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+                        ctx.lineTo(x + w, y + h - r);
+                        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                        ctx.lineTo(x + r, y + h);
+                        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+                        ctx.lineTo(x, y + r);
+                        ctx.quadraticCurveTo(x, y, x + r, y);
+                        ctx.closePath();
+                        ctx.fillStyle = fillStyle;
+                        ctx.fill();
+                        if (strokeStyle) {
+                            ctx.strokeStyle = strokeStyle;
+                            ctx.lineWidth = 2;
+                            ctx.stroke();
+                        }
+                    };
+
+                    const termShortMap = { 'Summer': 'SS', 'Semester 1': 'S1', 'Semester 2': 'S2' };
+                    const termSummary = this.selectedTerms.length === 3
+                        ? 'All Terms'
+                        : this.selectedTerms.map(t => termShortMap[t] || t).join(', ');
+                    const record = this.selectedRecord;
+                    const trendRecords = this.filteredRecords || [];
+                    const headcount = Number(record.headcount || 0);
+                    const bandPairs = [
+                        { label: 'A Range', value: Number(record.bands?.A || 0) },
+                        { label: 'B Range', value: Number(record.bands?.B || 0) },
+                        { label: 'C Range', value: Number(record.bands?.C || 0) },
+                        { label: 'Fail', value: Number(record.bands?.Fail || 0) },
+                        { label: 'W', value: Number(record.bands?.W || 0) }
+                    ];
+                    const trendEntries = trendRecords.map((r) => {
+                        const shortTerm = r.term === 'Summer' ? 'SS' : (r.term === 'Semester 1' ? 'S1' : 'S2');
+                        return {
+                            term: `${r.year}${shortTerm}`,
+                            rate: `${Number(r.pass_rate || 0).toFixed(1)}%`
+                        };
+                    });
+
+                    ctx.fillStyle = '#000000';
+                    ctx.fillRect(0, 0, reportCanvas.width, reportCanvas.height);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = 'bold 58px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                    ctx.fillText(this.currentCourse, 70, 90);
+                    ctx.fillStyle = '#9ca3af';
+                    ctx.font = '28px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                    ctx.fillText(`UoA Grade Insights Report`, 70, 130);
+                    ctx.fillText(`View: ${termSummary} | Generated: ${new Date().toLocaleString()}`, 70, 168);
+
+                    const kpis = [
+                        { label: 'PASS RATE', value: `${record.pass_rate}%`, color: '#4ade80' },
+                        { label: 'A RANGE', value: `${record.a_rate}%`, color: '#60a5fa' },
+                        { label: 'RISK (FAIL/DNC)', value: `${record.risk_rate}%`, color: '#fb923c' },
+                        { label: 'HEADCOUNT', value: `${record.headcount}`, color: '#d1d5db' }
+                    ];
+
+                    const cardY = 210;
+                    const cardW = 500;
+                    const gap = 24;
+                    kpis.forEach((kpi, idx) => {
+                        const x = 70 + idx * (cardW + gap);
+                        drawRoundedRect(x, cardY, cardW, 150, 20, 'rgba(255,255,255,0.04)', 'rgba(255,255,255,0.16)');
+                        ctx.fillStyle = '#9ca3af';
+                        ctx.font = '22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.fillText(kpi.label, x + 28, cardY + 52);
+                        ctx.fillStyle = kpi.color;
+                        ctx.font = 'bold 60px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.fillText(kpi.value, x + 28, cardY + 120);
+                    });
+
+                    const trendPanel = { x: 70, y: 390, w: 1420, h: 780 };
+                    const bandPanel = { x: 1520, y: 390, w: 610, h: 780 };
+                    drawRoundedRect(trendPanel.x, trendPanel.y, trendPanel.w, trendPanel.h, 24, 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0.14)');
+                    drawRoundedRect(bandPanel.x, bandPanel.y, bandPanel.w, bandPanel.h, 24, 'rgba(255,255,255,0.03)', 'rgba(255,255,255,0.14)');
+
+                    ctx.fillStyle = '#9ca3af';
+                    ctx.font = 'bold 34px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                    ctx.fillText('Historical Trend', trendPanel.x + 40, trendPanel.y + 55);
+                    ctx.fillText(`Grade Bands (${record.term} ${record.year})`, bandPanel.x + 30, bandPanel.y + 55);
+
+                    ctx.drawImage(trendCanvas, trendPanel.x + 30, trendPanel.y + 78, trendPanel.w - 60, 420);
+                    ctx.drawImage(bandCanvas, bandPanel.x + 24, bandPanel.y + 78, bandPanel.w - 48, 420);
+
+                    ctx.fillStyle = '#d1d5db';
+                    ctx.font = 'bold 22px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                    ctx.fillText('Pass Rate Timeline', trendPanel.x + 32, trendPanel.y + 540);
+                    ctx.fillText('Grade Bands Detail', bandPanel.x + 28, bandPanel.y + 540);
+
+                    const timelineLeft = trendPanel.x + 32;
+                    const timelineRight = trendPanel.x + trendPanel.w - 32;
+                    let cursorX = timelineLeft;
+                    let cursorY = trendPanel.y + 574;
+                    const rowGap = 30;
+                    trendEntries.forEach((entry) => {
+                        const termText = `${entry.term}: `;
+                        const rateText = entry.rate;
+                        ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        const termW = ctx.measureText(termText).width;
+                        ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        const rateW = ctx.measureText(rateText).width;
+                        const dividerW = ctx.measureText('   |   ').width;
+                        const totalW = termW + rateW + dividerW;
+                        if (cursorX + totalW > timelineRight) {
+                            cursorX = timelineLeft;
+                            cursorY += rowGap;
+                        }
+                        ctx.fillStyle = '#9ca3af';
+                        ctx.font = '17px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.fillText(termText, cursorX, cursorY);
+                        cursorX += termW;
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = 'bold 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.fillText(rateText, cursorX, cursorY);
+                        cursorX += rateW;
+                        ctx.fillStyle = '#4b5563';
+                        ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                        ctx.fillText('   |   ', cursorX, cursorY);
+                        cursorX += dividerW;
+                    });
+
+                    ctx.fillStyle = '#9ca3af';
+                    ctx.font = '18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                    const rightStartX = bandPanel.x + 28;
+                    const rightStartY = bandPanel.y + 575;
+                    bandPairs.forEach((band, idx) => {
+                        const pct = headcount > 0 ? (band.value / headcount) * 100 : 0;
+                        const line = `${band.label}: ${band.value} (${pct.toFixed(1)}%)`;
+                        ctx.fillText(line, rightStartX, rightStartY + idx * 40);
+                    });
+
+                    const termSafe = String(record.term || 'term').replace(/\s+/g, '-');
+                    const filename = `${this.currentCourse}-${record.year}-${termSafe}-report.png`;
+                    reportCanvas.toBlob((blob) => {
+                        if (!blob) {
+                            this.isExporting = false;
+                            return;
+                        }
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = filename;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        this.isExporting = false;
+                    }, 'image/png');
+                },
                 initTrendChart() {
                     const canvas = document.getElementById('trendChart');
                     if (!canvas) return;
@@ -256,6 +537,17 @@
 
                     const ctx = canvas.getContext('2d');
                     const self = this;
+                    const anomalyByIndex = {};
+                    if (this.anomalyEnabled) {
+                        for (let i = 1; i < records.length; i++) {
+                            const prev = Number(records[i - 1].pass_rate || 0);
+                            const current = Number(records[i].pass_rate || 0);
+                            const diff = current - prev;
+                            if (Math.abs(diff) >= this.anomalyThreshold) {
+                                anomalyByIndex[i] = diff;
+                            }
+                        }
+                    }
                     
                     this.trendChart = new Chart(ctx, {
                         type: 'bar',
@@ -265,8 +557,16 @@
                                 data: records.map(r => r.pass_rate),
                                 backgroundColor: records.map(r => this.getTermColor(r.term)),
                                 borderRadius: 6,
-                                hoverBorderWidth: 2,
-                                hoverBorderColor: '#fff'
+                                borderColor: records.map((_, idx) => {
+                                    if (!(idx in anomalyByIndex)) return 'transparent';
+                                    return anomalyByIndex[idx] > 0 ? '#22c55e' : '#ef4444';
+                                }),
+                                borderWidth: records.map((_, idx) => (idx in anomalyByIndex ? 2 : 0)),
+                                hoverBorderWidth: records.map((_, idx) => (idx in anomalyByIndex ? 3 : 2)),
+                                hoverBorderColor: records.map((_, idx) => {
+                                    if (!(idx in anomalyByIndex)) return '#fff';
+                                    return anomalyByIndex[idx] > 0 ? '#22c55e' : '#ef4444';
+                                })
                             }]
                         },
                         options: {
@@ -294,7 +594,19 @@
                                 y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666' } },
                                 x: { grid: { display: false }, ticks: { color: '#888', font: { size: 10 } } }
                             },
-                            plugins: { legend: { display: false } }
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        afterLabel: (context) => {
+                                            const idx = context.dataIndex;
+                                            if (!(idx in anomalyByIndex)) return '';
+                                            const diff = anomalyByIndex[idx];
+                                            return `Change vs prev: ${diff > 0 ? '+' : ''}${diff.toFixed(1)}%`;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     });
                 },
@@ -313,6 +625,7 @@
                     }
 
                     const bands = this.selectedRecord.bands;
+                    const headcount = Number(this.selectedRecord.headcount || 0);
                     const ctx = canvas.getContext('2d');
 
                     // 创建新的band chart
@@ -330,7 +643,19 @@
                             indexAxis: 'y',
                             responsive: true,
                             maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const label = context.label || '';
+                                            const value = Number(context.raw || 0);
+                                            const percent = headcount > 0 ? (value / headcount) * 100 : 0;
+                                            return `${label}: ${value} (${percent.toFixed(1)}%)`;
+                                        }
+                                    }
+                                }
+                            },
                             scales: {
                                 x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666' } },
                                 y: { grid: { display: false }, ticks: { color: '#fff' } }
