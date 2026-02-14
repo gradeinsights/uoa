@@ -93,7 +93,7 @@
                         <span>Historical Trend</span>
                         <div class="flex items-center gap-2">
                             <button @click="toggleAnomaly"
-                                :disabled="isAnomalyLocked"
+                                :disabled="isAnomalyLocked || isClickLocked"
                                 :class="[
                                     'px-2 py-1 rounded-md text-[10px] uppercase tracking-wider border transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
                                     anomalyEnabled
@@ -277,12 +277,14 @@
                     }, this.isMobile ? 1200 : 1000);
                 },
                 toggleAnomaly() {
-                    if (this.isAnomalyLocked) return;
+                    if (this.isAnomalyLocked || this.isClickLocked) return;
                     this.isAnomalyLocked = true;
+                    this.isClickLocked = true;
                     this.anomalyEnabled = !this.anomalyEnabled;
                     setTimeout(() => {
                         this.isAnomalyLocked = false;
-                    }, this.isMobile ? 900 : 700);
+                        this.isClickLocked = false;
+                    }, this.isMobile ? 1400 : 1100);
                 },
                 normalizeCourseText(value) {
                     return String(value || '')
