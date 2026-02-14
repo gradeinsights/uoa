@@ -182,9 +182,9 @@
                 setFilter(val) {
                     if (this.selectedTermFilter === val) return;
                     
-                    // 0.5秒防抖锁
+                    // 1秒防抖锁
                     if (this.isClickLocked) {
-                        console.log('Please wait between filter changes');
+                        console.log('Please wait 1 second between filter changes');
                         return;
                     }
                     
@@ -195,7 +195,7 @@
                     
                     setTimeout(() => {
                         this.isClickLocked = false;
-                    }, 500);
+                    }, 1000);
                 },
                 handleSearch() {
                     if (!this.searchQuery) return this.searchResults = [];
@@ -204,13 +204,6 @@
                     ).slice(0, 8);
                 },
                 selectCourse(id) {
-                    // 防止在渲染过程中重复点击
-                    if (this.isClickLocked) {
-                        console.log('Please wait, charts are rendering...');
-                        return;
-                    }
-                    
-                    this.isClickLocked = true;
                     this.currentCourse = id;
                     this.searchResults = [];
                     this.searchQuery = '';
@@ -226,10 +219,6 @@
                     
                     this.$nextTick(() => {
                         this.renderCharts();
-                        // 给足够时间来渲染所有图表
-                        setTimeout(() => {
-                            this.isClickLocked = false;
-                        }, 800);
                     });
                 },
                 getTermColor(term) {
@@ -271,23 +260,12 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            animation: {
-                                duration: 750,
-                                onProgress: function() {
-                                    self.isClickLocked = true;
-                                },
-                                onComplete: function() {
-                                    setTimeout(() => {
-                                        self.isClickLocked = false;
-                                    }, 100);
-                                }
-                            },
                             onClick: function(e, elements) {
                                 if (elements.length > 0) {
-                                    // 0.5秒防抖锁
+                                    // 1秒防抖锁
                                     const now = Date.now();
                                     if (self.isClickLocked) {
-                                        console.log('Please wait - animation in progress or cooldown active');
+                                        console.log('Please wait 1 second between clicks');
                                         return;
                                     }
                                     
@@ -298,7 +276,7 @@
                                     
                                     setTimeout(() => {
                                         self.isClickLocked = false;
-                                    }, 500);
+                                    }, 1000);
                                 }
                             },
                             scales: {
@@ -312,8 +290,6 @@
                 updateBandChart() {
                     const canvas = document.getElementById('bandChart');
                     if (!canvas || !this.selectedRecord) return;
-
-                    const self = this;
 
                     // 销毁旧的band chart
                     if (this.bandChart) {
@@ -343,17 +319,6 @@
                             indexAxis: 'y',
                             responsive: true,
                             maintainAspectRatio: false,
-                            animation: {
-                                duration: 750,
-                                onProgress: function() {
-                                    self.isClickLocked = true;
-                                },
-                                onComplete: function() {
-                                    setTimeout(() => {
-                                        self.isClickLocked = false;
-                                    }, 100);
-                                }
-                            },
                             plugins: { legend: { display: false } },
                             scales: {
                                 x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666' } },
