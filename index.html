@@ -182,9 +182,9 @@
                 setFilter(val) {
                     if (this.selectedTermFilter === val) return;
                     
-                    // 1秒防抖锁
+                    // 共享锁：任何操作都会禁止所有其他操作
                     if (this.isClickLocked) {
-                        console.log('Please wait 1 second between filter changes');
+                        console.log('Please wait, operation in progress...');
                         return;
                     }
                     
@@ -204,6 +204,13 @@
                     ).slice(0, 8);
                 },
                 selectCourse(id) {
+                    // 共享锁：任何操作都会禁止所有其他操作
+                    if (this.isClickLocked) {
+                        console.log('Please wait, operation in progress...');
+                        return;
+                    }
+                    
+                    this.isClickLocked = true;
                     this.currentCourse = id;
                     this.searchResults = [];
                     this.searchQuery = '';
@@ -219,6 +226,10 @@
                     
                     this.$nextTick(() => {
                         this.renderCharts();
+                        // 搜索后渲染两个图表需要1.5秒，期间禁止所有点击操作
+                        setTimeout(() => {
+                            this.isClickLocked = false;
+                        }, 1500);
                     });
                 },
                 getTermColor(term) {
@@ -262,10 +273,9 @@
                             maintainAspectRatio: false,
                             onClick: function(e, elements) {
                                 if (elements.length > 0) {
-                                    // 1秒防抖锁
-                                    const now = Date.now();
+                                    // 共享锁：任何操作都会禁止所有其他操作
                                     if (self.isClickLocked) {
-                                        console.log('Please wait 1 second between clicks');
+                                        console.log('Please wait, operation in progress...');
                                         return;
                                     }
                                     
