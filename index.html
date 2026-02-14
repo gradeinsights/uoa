@@ -51,10 +51,10 @@
                 
                 <div class="flex bg-white/5 p-1 rounded-xl border border-white/10 backdrop-blur-md">
                     <button v-for="opt in filterOptions" :key="opt.value" 
-                        @click="setFilter(opt.value)"
+                        @click="toggleTerm(opt.value)"
                         :class="[
                             'px-5 py-2 rounded-lg text-xs font-bold uppercase tracking-wider term-btn border border-transparent',
-                            selectedTermFilter === opt.value ? opt.activeClass : 'text-gray-500 hover:text-gray-300'
+                            selectedTerms.includes(opt.value) ? opt.activeClass : 'text-gray-500 hover:text-gray-300'
                         ]">
                         {{ opt.label }}
                     </button>
@@ -84,7 +84,7 @@
                 <div class="md:col-span-2 glass p-6">
                     <h3 class="text-sm font-semibold text-gray-400 mb-6 flex justify-between">
                         <span>Historical Trend</span>
-                        <span class="text-blue-500">{{ selectedTermFilter }} View</span>
+                        <span class="text-blue-500">{{ selectedTerms.length === 3 ? 'All Terms' : selectedTerms.map(t => t === 'Summer' ? 'SS' : (t === 'Semester 1' ? 'S1' : 'S2')).join(', ') }}</span>
                     </h3>
                     <div class="h-[250px] relative">
                         <canvas id="trendChart"></canvas>
@@ -123,10 +123,10 @@
                     currentCourse: null,
                     selectedRecordIndex: 0,
                     selectedTermFilter: 'ALL',
+                    selectedTerms: ['Summer', 'Semester 1', 'Semester 2'], // 默认全选
                     trendChart: null,
                     bandChart: null,
                     filterOptions: [
-                        { label: 'All', value: 'ALL', activeClass: 'active-all' },
                         { label: 'SS', value: 'Summer', activeClass: 'active-ss' },
                         { label: 'S1', value: 'Semester 1', activeClass: 'active-s1' },
                         { label: 'S2', value: 'Semester 2', activeClass: 'active-s2' }
@@ -140,8 +140,10 @@
                 filteredRecords() {
                     if (!this.currentCourse || !this.allData[this.currentCourse]) return [];
                     const records = this.allData[this.currentCourse];
-                    if (this.selectedTermFilter === 'ALL') return records;
-                    return records.filter(r => r.term === this.selectedTermFilter);
+                    // 如果没有选中任何学期，返回空数组
+                    if (this.selectedTerms.length === 0) return [];
+                    // 根据选中的学期过滤
+                    return records.filter(r => this.selectedTerms.includes(r.term));
                 },
                 selectedRecord() {
                     const records = this.filteredRecords;
@@ -180,9 +182,7 @@
                         console.error('Error destroying charts:', e);
                     }
                 },
-                setFilter(val) {
-                    if (this.selectedTermFilter === val) return;
-                    
+                toggleTerm(termValue) {
                     // 共享锁：任何操作都会禁止所有其他操作
                     if (this.isClickLocked) {
                         console.log('Please wait, operation in progress...');
@@ -190,7 +190,17 @@
                     }
                     
                     this.isClickLocked = true;
-                    this.selectedTermFilter = val;
+                    
+                    const index = this.selectedTerms.indexOf(termValue);
+                    if (index > -1) {
+                        // 如果已选中，则取消选择
+                        this.selectedTerms.splice(index, 1);
+                    } else {
+                        // 如果未选中，则添加
+                        this.selectedTerms.push(termValue);
+                    }
+                    
+                    // 重置选中的记录索引为最新的一条
                     this.selectedRecordIndex = Math.max(0, this.filteredRecords.length - 1);
                     this.renderCharts();
                     
@@ -215,7 +225,7 @@
                     this.currentCourse = id;
                     this.searchResults = [];
                     this.searchQuery = '';
-                    this.selectedTermFilter = 'ALL';
+                    this.selectedTerms = ['Summer', 'Semester 1', 'Semester 2']; // 重置为全选
 
                     const termOrder = { 'Summer': 0, 'Semester 1': 1, 'Semester 2': 2 };
                     this.allData[id].sort((a, b) => {
