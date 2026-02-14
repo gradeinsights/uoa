@@ -260,12 +260,23 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: {
+                                duration: 750,
+                                onProgress: function() {
+                                    self.isClickLocked = true;
+                                },
+                                onComplete: function() {
+                                    setTimeout(() => {
+                                        self.isClickLocked = false;
+                                    }, 100);
+                                }
+                            },
                             onClick: function(e, elements) {
                                 if (elements.length > 0) {
                                     // 1秒防抖锁
                                     const now = Date.now();
                                     if (self.isClickLocked) {
-                                        console.log('Please wait 1 second between clicks');
+                                        console.log('Please wait - animation in progress or cooldown active');
                                         return;
                                     }
                                     
@@ -290,6 +301,8 @@
                 updateBandChart() {
                     const canvas = document.getElementById('bandChart');
                     if (!canvas || !this.selectedRecord) return;
+
+                    const self = this;
 
                     // 销毁旧的band chart
                     if (this.bandChart) {
@@ -319,6 +332,17 @@
                             indexAxis: 'y',
                             responsive: true,
                             maintainAspectRatio: false,
+                            animation: {
+                                duration: 750,
+                                onProgress: function() {
+                                    self.isClickLocked = true;
+                                },
+                                onComplete: function() {
+                                    setTimeout(() => {
+                                        self.isClickLocked = false;
+                                    }, 100);
+                                }
+                            },
                             plugins: { legend: { display: false } },
                             scales: {
                                 x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#666' } },
