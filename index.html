@@ -92,9 +92,10 @@
                     <h3 class="text-sm font-semibold text-gray-400 mb-6 flex justify-between">
                         <span>Historical Trend</span>
                         <div class="flex items-center gap-2">
-                            <button @click="anomalyEnabled = !anomalyEnabled"
+                            <button @click="toggleAnomaly"
+                                :disabled="isAnomalyLocked"
                                 :class="[
-                                    'px-2 py-1 rounded-md text-[10px] uppercase tracking-wider border transition-colors',
+                                    'px-2 py-1 rounded-md text-[10px] uppercase tracking-wider border transition-colors disabled:opacity-60 disabled:cursor-not-allowed',
                                     anomalyEnabled
                                         ? 'text-emerald-300 border-emerald-500/50 bg-emerald-500/10'
                                         : 'text-gray-400 border-white/20 bg-white/5'
@@ -166,6 +167,7 @@
                     ],
                     anomalyEnabled: false,
                     anomalyThreshold: 8,
+                    isAnomalyLocked: false,
                     isExporting: false,
                     isClickLocked: false,
                     lastClickTime: 0,
@@ -272,7 +274,15 @@
                     
                     setTimeout(() => {
                         this.isClickLocked = false;
-                    }, this.isMobile ? 3000 : 1000);
+                    }, this.isMobile ? 1200 : 1000);
+                },
+                toggleAnomaly() {
+                    if (this.isAnomalyLocked) return;
+                    this.isAnomalyLocked = true;
+                    this.anomalyEnabled = !this.anomalyEnabled;
+                    setTimeout(() => {
+                        this.isAnomalyLocked = false;
+                    }, this.isMobile ? 900 : 700);
                 },
                 normalizeCourseText(value) {
                     return String(value || '')
@@ -348,7 +358,7 @@
                         // 搜索后渲染两个图表：移动端4秒，桌面端1.5秒
                         setTimeout(() => {
                             this.isClickLocked = false;
-                        }, this.isMobile ? 4000 : 1500);
+                        }, this.isMobile ? 1800 : 1500);
                     });
                 },
                 getTermColor(term) {
@@ -587,7 +597,7 @@
                                     
                                     setTimeout(() => {
                                         self.isClickLocked = false;
-                                    }, self.isMobile ? 3000 : 1000);
+                                    }, self.isMobile ? 1200 : 1000);
                                 }
                             },
                             scales: {
